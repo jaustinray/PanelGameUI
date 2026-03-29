@@ -1,6 +1,9 @@
 import streamlit as st
 import random
 
+# At the top of your app (visible but hidden)
+st.audio(click_sound, format='audio/mp3', loop=False)
+
 # --- Game Logic Functions ---
 
 def flip_symbol(s):
