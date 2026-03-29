@@ -1,8 +1,9 @@
 import streamlit as st
 import random
 
-# At the top of your app (visible but hidden)
-st.audio(click_sound, format='audio/mp3', loop=False)
+# --- Configuration ---
+CLICK_SOUND_FILE = "soundreality-ding-411634.mp3"
+WIN_SOUND_FILE = "universfield-interface-124464.mp3"
 
 # --- Game Logic Functions ---
 
@@ -48,46 +49,49 @@ if 'grid' not in st.session_state:
     st.session_state.won = False
     st.session_state.click_count = 0
 
-# Audio files (ensure they're in your repo root)
-click_sound = "soundreality-ding-411634.mp3"
-win_sound = "universfield-interface-124464.mp3"
-
-# Create JavaScript for audio playback
+# --- Audio Injection (JavaScript) ---
+# We inject JS to handle audio because Streamlit buttons don't natively trigger sound
 js_code = f"""
 <script>
-// Audio elements
-const clickAudio = new Audio('{click_sound}');
-const winAudio = new Audio('{win_sound}');
+// Define audio objects
+const clickAudio = new Audio('{CLICK_SOUND_FILE}');
+const winAudio = new Audio('{WIN_SOUND_FILE}');
 
-// Function to play click sound
-function playClickSound() {{
-    clickAudio.currentTime = 0;
-    clickAudio.play().catch(e => console.log('Audio play blocked:', e));
+// Helper to play sound safely (handles browser autoplay policies)
+function playSound(audioObj) {{
+    audioObj.currentTime = 0;
+    audioObj.play().catch(error => {{
+        console.warn('Audio play failed (likely due to browser policy):', error);
+    }});
 }}
 
-// Function to play win sound
-function playWinSound() {{
-    winAudio.currentTime = 0;
-    winAudio.play().catch(e => console.log('Audio play blocked:', e));
-}}
-
-// Listen for button clicks and play sound
+// Listen for ANY click on the page to initialize audio context (browser requirement)
+let audioInitialized = false;
 document.addEventListener('click', function(e) {{
-    if (e.target.tagName === 'BUTTON') {{
-        playClickSound();
+    if (!audioInitialized) {{
+        // Try to play a silent sound or just initialize
+        clickAudio.load(); 
+        audioInitialized = true;
     }}
-}});
+    
+    // If a button was clicked, play the click sound
+    if (e.target.tagName === 'BUTTON') {{
+        playSound(clickAudio);
+    }}
+}}, {{ once: false }});
 
-// Listen for win message appearance
+// Observe DOM for the "Congratulations" message to play win sound
 const observer = new MutationObserver(function(mutations) {{
     mutations.forEach(function(mutation) {{
-        if (mutation.addedNodes.length > 0) {{
-            mutation.addedNodes.forEach(function(node) {{
-                if (node.textContent && node.textContent.includes('Congratulations')) {{
-                    playWinSound();
+        mutation.addedNodes.forEach(function(node) {{
+            if (node.nodeType === 3) {{ // Text node
+                if (node.textContent.includes('Congratulations')) {{
+                    playSound(winAudio);
                 }}
-            }});
-        }}
+            }} else if (node.textContent && node.textContent.includes('Congratulations')) {{
+                playSound(winAudio);
+            }}
+        }});
     }});
 }});
 
@@ -95,8 +99,10 @@ observer.observe(document.body, {{ childList: true, subtree: true }});
 </script>
 """
 
-# Inject JavaScript
+# Inject the script at the top (height 0 to hide iframe)
 st.components.v1.html(js_code, height=0)
+
+# --- Game UI ---
 
 # Display the Grid
 cols = st.columns(3)
@@ -105,11 +111,14 @@ for r in range(3):
         with cols[c]:
             current_val = st.session_state.grid[r][c]
             
+            # Button styling: Primary for 'O' (needs flipping), Secondary for 'X'
+            btn_type = "primary" if current_val == 'O' else "secondary"
+            
             if st.button(
                 current_val, 
                 key=f"{r}_{c}", 
                 use_container_width=True,
-                type="primary" if current_val == 'O' else "secondary"
+                type=btn_type
             ):
                 if not st.session_state.won:
                     press_panel_logic(st.session_state.grid, r, c)
