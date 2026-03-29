@@ -32,7 +32,7 @@ def create_scrambled_grid() -> list[list[str]]:
     return grid
 
 # --- Audio Injection ---
-
+# Note: Curly braces in JS arrow functions must be doubled {{ }} for f-strings
 AUDIO_SCRIPT = f"""
 <script>
 const clickAudio = new Audio('{CLICK_SOUND}');
@@ -40,7 +40,7 @@ const winAudio = new Audio('{WIN_SOUND}');
 
 function playSound(audio) {{
     audio.currentTime = 0;
-    audio.play().catch(() => {});
+    audio.play().catch(() => {{}});
 }}
 
 document.addEventListener('click', (e) => {{
