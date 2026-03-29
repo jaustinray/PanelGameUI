@@ -11,7 +11,6 @@ def flip_symbol(symbol: str) -> str:
     return "O" if symbol == "X" else "X"
 
 def press_panel(grid: list[list[str]], row: int, col: int) -> None:
-    """Flips the clicked cell and its orthogonal neighbors."""
     grid[row][col] = flip_symbol(grid[row][col])
     neighbors = [
         (row - 1, col), (row + 1, col),
@@ -31,10 +30,18 @@ def create_scrambled_grid() -> list[list[str]]:
         press_panel(grid, r, c)
     return grid
 
-# --- Audio Injection ---
-# Note: Curly braces in JS arrow functions must be doubled {{ }} for f-strings
+# --- Audio Injection (Optimized) ---
+# We use a unique ID to ensure we don't duplicate observers if the script re-runs
+SCRIPT_ID = "lights-out-audio-script"
+
 AUDIO_SCRIPT = f"""
 <script>
+// Prevent duplicate initialization
+if (document.getElementById('{SCRIPT_ID}')) {{
+    console.log('Audio script already loaded');
+    return;
+}}
+
 const clickAudio = new Audio('{CLICK_SOUND}');
 const winAudio = new Audio('{WIN_SOUND}');
 
@@ -43,21 +50,36 @@ function playSound(audio) {{
     audio.play().catch(() => {{}});
 }}
 
+// Use a flag to prevent multiple observers
+let observerAttached = false;
+
 document.addEventListener('click', (e) => {{
     if (e.target.tagName === 'BUTTON') {{
         const text = e.target.innerText.trim();
-        if (text === 'X' || text === 'O') playSound(clickAudio);
+        if (text === 'X' || text === 'O') {{
+            playSound(clickAudio);
+        }}
     }}
 }}, true);
 
-const observer = new MutationObserver((mutations) => {{
-    mutations.forEach(m => m.addedNodes.forEach(n => {{
-        if (n.textContent && n.textContent.includes('Congratulations')) {{
-            playSound(winAudio);
-        }}
-    }}));
-}});
-observer.observe(document.body, {{ childList: true, subtree: true }});
+// Attach observer only once
+if (!observerAttached) {{
+    const observer = new MutationObserver((mutations) => {{
+        mutations.forEach(m => m.addedNodes.forEach(n => {{
+            if (n.textContent && n.textContent.includes('Congratulations')) {{
+                playSound(winAudio);
+            }}
+        }}));
+    }});
+    observer.observe(document.body, {{ childList: true, subtree: true }});
+    observerAttached = true;
+}}
+
+// Mark script as loaded
+const marker = document.createElement('div');
+marker.id = '{SCRIPT_ID}';
+marker.style.display = 'none';
+document.body.appendChild(marker);
 </script>
 """
 
@@ -73,7 +95,7 @@ if 'grid' not in st.session_state:
     st.session_state.won = False
     st.session_state.moves = 0
 
-# Inject Audio Script
+# Inject Audio Script (Only runs once effectively due to ID check in JS)
 st.write(AUDIO_SCRIPT, unsafe_allow_html=True)
 
 # Render Grid
@@ -84,6 +106,7 @@ for r in range(3):
             val = st.session_state.grid[r][c]
             btn_type = "primary" if val == "O" else "secondary"
             
+            # The key is unique per cell, ensuring Streamlit tracks state correctly
             if st.button(val, key=f"{r}_{c}", use_container_width=True, type=btn_type):
                 if not st.session_state.won:
                     press_panel(st.session_state.grid, r, c)
