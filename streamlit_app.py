@@ -39,18 +39,61 @@ st.set_page_config(page_title="Lights Out", page_icon="🔦")
 st.title("🔦 Lights Out Puzzle")
 st.markdown("Click tiles to flip them and their neighbors. Goal: Make all tiles **X**.")
 
-# Initialize Session State (persists across reruns)
+# Initialize Session State
 if 'grid' not in st.session_state:
     st.session_state.grid = create_initial_grid()
     st.session_state.won = False
+    st.session_state.click_count = 0
 
-# Handle button clicks using a callback approach
-def handle_press(row, col):
-    if not st.session_state.won:
-        press_panel_logic(st.session_state.grid, row, col)
-        
-        if check_win(st.session_state.grid):
-            st.session_state.won = True
+# Audio files (ensure they're in your repo root)
+click_sound = "soundreality-ding-411634.mp3"
+win_sound = "universfield-interface-124464.mp3"
+
+# Create JavaScript for audio playback
+js_code = f"""
+<script>
+// Audio elements
+const clickAudio = new Audio('{click_sound}');
+const winAudio = new Audio('{win_sound}');
+
+// Function to play click sound
+function playClickSound() {{
+    clickAudio.currentTime = 0;
+    clickAudio.play().catch(e => console.log('Audio play blocked:', e));
+}}
+
+// Function to play win sound
+function playWinSound() {{
+    winAudio.currentTime = 0;
+    winAudio.play().catch(e => console.log('Audio play blocked:', e));
+}}
+
+// Listen for button clicks and play sound
+document.addEventListener('click', function(e) {{
+    if (e.target.tagName === 'BUTTON') {{
+        playClickSound();
+    }}
+}});
+
+// Listen for win message appearance
+const observer = new MutationObserver(function(mutations) {{
+    mutations.forEach(function(mutation) {{
+        if (mutation.addedNodes.length > 0) {{
+            mutation.addedNodes.forEach(function(node) {{
+                if (node.textContent && node.textContent.includes('Congratulations')) {{
+                    playWinSound();
+                }}
+            }});
+        }}
+    }});
+}});
+
+observer.observe(document.body, {{ childList: true, subtree: true }});
+</script>
+"""
+
+# Inject JavaScript
+st.components.v1.html(js_code, height=0)
 
 # Display the Grid
 cols = st.columns(3)
@@ -59,22 +102,28 @@ for r in range(3):
         with cols[c]:
             current_val = st.session_state.grid[r][c]
             
-            # Use on_click callback to ensure proper state update
             if st.button(
                 current_val, 
                 key=f"{r}_{c}", 
                 use_container_width=True,
                 type="primary" if current_val == 'O' else "secondary"
             ):
-                handle_press(r, c)
-                st.rerun()  # Force immediate rerun after click
+                if not st.session_state.won:
+                    press_panel_logic(st.session_state.grid, r, c)
+                    st.session_state.click_count += 1
+                    
+                    if check_win(st.session_state.grid):
+                        st.session_state.won = True
+                        st.rerun()
 
 # Win Message
 if st.session_state.won:
     st.balloons()
     st.success("🎉 Congratulations! You solved the puzzle!")
+    st.write(f"Total moves: {st.session_state.click_count}")
     
     if st.button("Play Again"):
         st.session_state.grid = create_initial_grid()
         st.session_state.won = False
+        st.session_state.click_count = 0
         st.rerun()
